@@ -1,8 +1,9 @@
-#include "bstree.h"
+#include "binarytree.h"
 
 #include <QByteArray>
 #include <QQueue>
 #include <algorithm>
+#include <cstring>
 
 BSTree::~BSTree() {
     clear();
