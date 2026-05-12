@@ -3,9 +3,9 @@
 
 #include <QWidget>
 #include <QMap>
-#include <QPoint>
+#include <QPointF>
 
-class BinaryTree;
+class BSTree;
 struct Node;
 
 class TreeWidget : public QWidget
@@ -14,20 +14,20 @@ class TreeWidget : public QWidget
 
 public:
     explicit TreeWidget(QWidget *parent = nullptr);
-    void setTree(BinaryTree* tree);
+    void setTree(BSTree* tree);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
 private:
-    BinaryTree* m_tree;
-    QMap<Node*, QPoint> m_pos;
+    BSTree* m_tree;
+    QMap<const Node*, QPointF> m_pos;
 
     void updateLayout();
-    void calculatePositions(Node* node, int x, int y, int offset);
-    void drawEdges(QPainter& painter, Node* node);
-    void drawNodes(QPainter& painter, Node* node);
+    void assignPos(const Node* n, int depth, int& idx, int stepX, int stepY, int margin);
+    void drawEdges(QPainter& painter, const Node* node);
+    void drawNodes(QPainter& painter, const Node* node);
 };
 
 #endif

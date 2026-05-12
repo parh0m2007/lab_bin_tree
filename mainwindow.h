@@ -2,8 +2,9 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QSplitter>
 
-class BinaryTree;
+class BSTree;
 class TreeWidget;
 class QLineEdit;
 class QTextEdit;
@@ -14,9 +15,10 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
+    ~MainWindow();
 
 private:
-    BinaryTree* m_tree;
+    BSTree* m_tree;
     TreeWidget* m_treeWidget;
     QLineEdit* m_valueEdit;
     QLineEdit* m_prefixEdit;
