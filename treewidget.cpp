@@ -2,6 +2,7 @@
 #include "binarytree.h"
 #include <QPainter>
 #include <QResizeEvent>
+#include <QMouseEvent>
 #include <algorithm>
 
 TreeWidget::TreeWidget(QWidget* parent) : QWidget(parent) {
@@ -11,13 +12,84 @@ TreeWidget::TreeWidget(QWidget* parent) : QWidget(parent) {
 
 void TreeWidget::setTree(BSTree* tree) {
     m_tree = tree;
-    updateLayout();
+    if (!m_demoMode) {
+        updateLayout();
+    }
     update();
+}
+
+void TreeWidget::setDemoMode(bool enabled) {
+    m_demoMode = enabled;
+    if (!enabled) {
+        m_currentStep = -1;
+        m_totalSteps = 0;
+        m_highlightedNodes.clear();
+        m_modifiedNodes.clear();
+        m_currentNode = nullptr;
+        m_stepDescription.clear();
+        updateLayout();
+    }
+    update();
+}
+
+void TreeWidget::setCurrentStep(int step) {
+    if (!m_demoMode || !m_tree) return;
+    
+    m_currentStep = qBound(-1, step, m_tree->totalSteps() - 1);
+    m_totalSteps = m_tree->totalSteps();
+    
+    if (m_currentStep >= 0 && m_currentStep < m_tree->totalSteps()) {
+        const StepInfo& info = m_tree->getStep(m_currentStep);
+        m_stepDescription = info.description;
+        m_operationType = info.operationType;
+        m_currentNode = info.currentNode;
+        
+        m_highlightedNodes.clear();
+        for (const Node* n : info.highlightedNodes) {
+            m_highlightedNodes.insert(n);
+        }
+        
+        m_modifiedNodes.clear();
+        for (const Node* n : info.modifiedNodes) {
+            m_modifiedNodes.insert(n);
+        }
+    } else {
+        m_highlightedNodes.clear();
+        m_modifiedNodes.clear();
+        m_currentNode = nullptr;
+        m_stepDescription.clear();
+    }
+    
+    emit stepChanged(m_currentStep);
+    
+    if (m_currentStep >= m_tree->totalSteps() - 1) {
+        emit demoFinished();
+    }
+    
+    update();
+}
+
+void TreeWidget::updateFromStep() {
+    if (m_demoMode && m_tree && m_currentStep >= 0) {
+        setCurrentStep(m_currentStep);
+    }
 }
 
 void TreeWidget::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
-    updateLayout();
+    if (!m_demoMode) {
+        updateLayout();
+    }
+}
+
+void TreeWidget::mousePressEvent(QMouseEvent* event) {
+    if (m_demoMode && event->button() == Qt::LeftButton) {
+        // Клик для перехода к следующему шагу
+        if (m_currentStep < m_totalSteps - 1) {
+            setCurrentStep(m_currentStep + 1);
+        }
+    }
+    QWidget::mousePressEvent(event);
 }
 
 void TreeWidget::assignPos(const Node* n, int depth, int& idx, int stepX, int stepY, int margin) {
@@ -58,10 +130,37 @@ void TreeWidget::drawEdges(QPainter& p, const Node* n) {
 void TreeWidget::drawNodes(QPainter& p, const Node* n) {
     if (!n) return;
     const QPointF c = m_pos.value(n);
-    QRectF r(c.x() - 18, c.y() - 18, 36, 36);
-    p.setBrush(Qt::white);
+    QRectF r(c.x() - 20, c.y() - 20, 40, 40);
+    
+    // Определяем цвет узла
+    QColor fillColor = Qt::white;
+    QColor borderColor = Qt::black;
+    int penWidth = 2;
+    
+    if (m_demoMode) {
+        if (m_modifiedNodes.contains(n)) {
+            fillColor = QColor(255, 200, 200); // Светло-красный для измененных
+            borderColor = QColor(255, 0, 0);
+            penWidth = 3;
+        } else if (m_highlightedNodes.contains(n)) {
+            fillColor = QColor(200, 255, 200); // Светло-зеленый для текущих
+            borderColor = QColor(0, 200, 0);
+            penWidth = 3;
+        }
+        
+        if (n == m_currentNode) {
+            borderColor = QColor(0, 0, 255);
+            penWidth = 4;
+        }
+    }
+    
+    p.setBrush(fillColor);
+    p.setPen(QPen(borderColor, penWidth));
     p.drawEllipse(r);
+    
+    p.setPen(Qt::black);
     p.drawText(r, Qt::AlignCenter, QString::fromUtf8(n->data));
+    
     drawNodes(p, n->left);
     drawNodes(p, n->right);
 }
@@ -71,14 +170,34 @@ void TreeWidget::paintEvent(QPaintEvent* event) {
 
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
-    p.setPen(QPen(Qt::black, 1.5));
 
     if (!m_tree || !m_tree->root()) {
+        p.setPen(Qt::black);
         p.drawText(rect(), Qt::AlignCenter, "Дерево пусто");
         return;
     }
 
-    updateLayout();
+    if (!m_demoMode) {
+        updateLayout();
+    }
+    
+    p.setPen(QPen(Qt::black, 1.5));
     drawEdges(p, m_tree->root());
     drawNodes(p, m_tree->root());
+    
+    // Отображение информации о текущем шаге в демо-режиме
+    if (m_demoMode && !m_stepDescription.isEmpty()) {
+        QRect textRect = rect();
+        textRect.setHeight(40);
+        textRect.moveTop(height() - 45);
+        
+        p.setPen(Qt::black);
+        p.setFont(QFont("Arial", 11));
+        p.drawText(textRect, Qt::AlignCenter, m_stepDescription);
+        
+        // Индикатор шага
+        QString stepInfo = QString("Шаг %1 из %2").arg(m_currentStep + 1).arg(m_totalSteps);
+        p.setFont(QFont("Arial", 10));
+        p.drawText(10, height() - 10, stepInfo);
+    }
 }

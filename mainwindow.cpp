@@ -10,6 +10,10 @@
 #include <QFormLayout>
 #include <QLabel>
 #include <QSplitter>
+#include <QCheckBox>
+#include <QSlider>
+#include <QGroupBox>
+#include <QTimerEvent>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     auto* central = new QWidget(this);
@@ -55,6 +59,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     leftLayout->addWidget(btnSample);
     leftLayout->addWidget(btnClear);
 
+    // Добавляем элементы управления для демо-режима
+    setupDemoControls(leftLayout);
+
     m_output = new QTextEdit();
     m_output->setReadOnly(true);
     leftLayout->addWidget(new QLabel("Вывод:"));
@@ -63,6 +70,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_tree = new BSTree();
     m_treeWidget = new TreeWidget(splitter);
     m_treeWidget->setTree(m_tree);
+    
+    connect(m_treeWidget, &TreeWidget::stepChanged, this, [this](int step) {
+        updateDemoControls();
+    });
 
     splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
@@ -73,23 +84,51 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(btnInsert, &QPushButton::clicked, this, [this] {
         const QString v = m_valueEdit->text().trimmed();
         if (v.isEmpty()) return;
-        if (m_tree->insert(v)) log("Добавлен: " + v);
-        else log("Элемент уже существует или пустой.");
+        m_tree->setDemoMode(m_demoModeCheck->isChecked());
+        if (m_tree->insert(v)) {
+            if (m_demoModeCheck->isChecked()) {
+                log("Демо: Вставка элемента \"" + v + "\"");
+                m_treeWidget->setCurrentStep(0);
+                updateDemoControls();
+            } else {
+                log("Добавлен: " + v);
+            }
+        } else {
+            log("Элемент уже существует или пустой.");
+        }
         refresh();
     });
 
     connect(btnRemove, &QPushButton::clicked, this, [this] {
         const QString v = m_valueEdit->text().trimmed();
         if (v.isEmpty()) return;
-        if (m_tree->remove(v)) log("Удалён: " + v);
-        else log("Элемент не найден: " + v);
+        m_tree->setDemoMode(m_demoModeCheck->isChecked());
+        if (m_tree->remove(v)) {
+            if (m_demoModeCheck->isChecked()) {
+                log("Демо: Удаление элемента \"" + v + "\"");
+                m_treeWidget->setCurrentStep(0);
+                updateDemoControls();
+            } else {
+                log("Удалён: " + v);
+            }
+        } else {
+            log("Элемент не найден: " + v);
+        }
         refresh();
     });
 
     connect(btnSearch, &QPushButton::clicked, this, [this] {
         const QString v = m_valueEdit->text().trimmed();
         if (v.isEmpty()) return;
-        log(QString("Поиск \"%1\": %2").arg(v, m_tree->contains(v) ? "найден" : "не найден"));
+        m_tree->setDemoMode(m_demoModeCheck->isChecked());
+        bool found = m_tree->contains(v);
+        if (m_demoModeCheck->isChecked()) {
+            log("Демо: Поиск элемента \"" + v + "\"");
+            m_treeWidget->setCurrentStep(0);
+            updateDemoControls();
+        } else {
+            log(QString("Поиск \"%1\": %2").arg(v, found ? "найден" : "не найден"));
+        }
     });
 
     connect(btnCount, &QPushButton::clicked, this, [this] {
@@ -120,19 +159,30 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     });
 
     connect(btnBalance, &QPushButton::clicked, this, [this] {
+        m_tree->setDemoMode(m_demoModeCheck->isChecked());
         m_tree->balance();
-        log("Дерево сбалансировано.");
+        if (m_demoModeCheck->isChecked()) {
+            log("Демо: Балансировка дерева");
+            m_treeWidget->setCurrentStep(0);
+            updateDemoControls();
+        } else {
+            log("Дерево сбалансировано.");
+        }
         refresh();
     });
 
     connect(btnClear, &QPushButton::clicked, this, [this] {
         m_tree->clear();
+        m_treeWidget->setDemoMode(false);
+        m_demoModeCheck->setChecked(false);
         log("Дерево очищено.");
         refresh();
     });
 
     connect(btnSample, &QPushButton::clicked, this, [this] {
         m_tree->clear();
+        m_treeWidget->setDemoMode(false);
+        m_demoModeCheck->setChecked(false);
         const QStringList sample = {
             "mango", "apple", "pear", "banana", "cherry",
             "kiwi", "plum", "grape", "orange", "lemon",
@@ -143,8 +193,136 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         refresh();
     });
 
-    setWindowTitle("ЛР1. Бинарные деревья. Вариант 25");
-    resize(1200, 700);
+    setWindowTitle("ЛР1. Бинарные деревья. Вариант 25 (Qt6 + Демо режим)");
+    resize(1400, 800);
+}
+
+void MainWindow::setupDemoControls(QVBoxLayout* layout) {
+    auto* demoGroup = new QGroupBox("Демонстрационный режим");
+    auto* demoLayout = new QVBoxLayout(demoGroup);
+    
+    m_demoModeCheck = new QCheckBox("Включить пошаговую демонстрацию");
+    m_demoModeCheck->setChecked(false);
+    connect(m_demoModeCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        m_tree->setDemoMode(checked);
+        m_treeWidget->setDemoMode(checked);
+        if (!checked) {
+            stopTimer();
+        }
+        updateDemoControls();
+        log(checked ? "Включен режим пошаговой демонстрации" : "Выключен режим демонстрации");
+    });
+    demoLayout->addWidget(m_demoModeCheck);
+    
+    // Панель управления шагами
+    auto* stepControlLayout = new QHBoxLayout();
+    
+    m_prevStepBtn = new QPushButton("◀ Пред.");
+    m_prevStepBtn->setEnabled(false);
+    connect(m_prevStepBtn, &QPushButton::clicked, this, &MainWindow::goToPrevStep);
+    stepControlLayout->addWidget(m_prevStepBtn);
+    
+    m_playBtn = new QPushButton("▶ Старт");
+    m_playBtn->setEnabled(false);
+    connect(m_playBtn, &QPushButton::clicked, this, &MainWindow::togglePlayPause);
+    stepControlLayout->addWidget(m_playBtn);
+    
+    m_nextStepBtn = new QPushButton("След. ▶");
+    m_nextStepBtn->setEnabled(false);
+    connect(m_nextStepBtn, &QPushButton::clicked, this, &MainWindow::goToNextStep);
+    stepControlLayout->addWidget(m_nextStepBtn);
+    
+    demoLayout->addLayout(stepControlLayout);
+    
+    // Слайдер для навигации по шагам
+    m_stepSlider = new QSlider(Qt::Horizontal);
+    m_stepSlider->setEnabled(false);
+    m_stepSlider->setMinimum(0);
+    m_stepSlider->setMaximum(0);
+    m_stepSlider->setValue(0);
+    connect(m_stepSlider, &QSlider::valueChanged, this, [this](int value) {
+        if (m_isPlaying) {
+            togglePlayPause();
+        }
+        m_treeWidget->setCurrentStep(value);
+    });
+    demoLayout->addWidget(m_stepSlider);
+    
+    // Метка текущего шага
+    m_stepLabel = new QLabel("Шаг: 0 / 0");
+    m_stepLabel->setAlignment(Qt::AlignCenter);
+    demoLayout->addWidget(m_stepLabel);
+    
+    layout->addWidget(demoGroup);
+}
+
+void MainWindow::updateDemoControls() {
+    bool hasSteps = m_tree->totalSteps() > 0;
+    int currentStep = m_treeWidget->currentStep();
+    int totalSteps = m_treeWidget->totalSteps();
+    
+    m_prevStepBtn->setEnabled(hasSteps && currentStep > 0);
+    m_nextStepBtn->setEnabled(hasSteps && currentStep < totalSteps - 1);
+    m_playBtn->setEnabled(hasSteps);
+    m_stepSlider->setEnabled(hasSteps);
+    
+    m_stepSlider->setMaximum(qMax(0, totalSteps - 1));
+    m_stepSlider->setValue(qBound(0, currentStep + 1, qMax(0, totalSteps - 1)));
+    
+    m_stepLabel->setText(QString("Шаг: %1 / %2").arg(currentStep + 1).arg(totalSteps));
+    
+    if (currentStep >= totalSteps - 1 && m_isPlaying) {
+        togglePlayPause();
+    }
+    
+    m_playBtn->setText(m_isPlaying ? "⏸ Пауза" : "▶ Старт");
+}
+
+void MainWindow::goToNextStep() {
+    int nextStep = m_treeWidget->currentStep() + 1;
+    if (nextStep < m_tree->totalSteps()) {
+        m_treeWidget->setCurrentStep(nextStep);
+        updateDemoControls();
+    }
+}
+
+void MainWindow::goToPrevStep() {
+    int prevStep = m_treeWidget->currentStep() - 1;
+    if (prevStep >= 0) {
+        m_treeWidget->setCurrentStep(prevStep);
+        updateDemoControls();
+    }
+}
+
+void MainWindow::togglePlayPause() {
+    if (m_isPlaying) {
+        stopTimer();
+    } else {
+        m_isPlaying = true;
+        m_playBtn->setText("⏸ Пауза");
+        m_playTimerId = startTimer(800); // 800 мс между шагами
+        goToNextStep();
+    }
+}
+
+void MainWindow::stopTimer() {
+    if (m_playTimerId != -1) {
+        killTimer(m_playTimerId);
+        m_playTimerId = -1;
+    }
+    m_isPlaying = false;
+    m_playBtn->setText("▶ Старт");
+}
+
+void MainWindow::timerEvent(QTimerEvent* event) {
+    if (event->timerId() == m_playTimerId) {
+        if (m_treeWidget->currentStep() >= m_tree->totalSteps() - 1) {
+            stopTimer();
+        } else {
+            goToNextStep();
+        }
+    }
+    QMainWindow::timerEvent(event);
 }
 
 void MainWindow::log(const QString& s) {
@@ -153,8 +331,10 @@ void MainWindow::log(const QString& s) {
 
 void MainWindow::refresh() {
     m_treeWidget->update();
+    updateDemoControls();
 }
 
 MainWindow::~MainWindow() {
+    stopTimer();
     delete m_tree;
 }

@@ -3,6 +3,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <QPointer>
 
 struct Node {
     char* data = nullptr;
@@ -10,6 +11,14 @@ struct Node {
     Node* right = nullptr;
 
     explicit Node(char* s) : data(s) {}
+};
+
+struct StepInfo {
+    QString description;
+    QVector<const Node*> highlightedNodes;
+    QVector<const Node*> modifiedNodes;
+    const Node* currentNode = nullptr;
+    int operationType = 0; // 0=none, 1=insert, 2=remove, 3=search, 4=balance
 };
 
 class BSTree {
@@ -37,8 +46,20 @@ public:
 
     void balance();
 
+    // Методы для демонстрационного режима
+    void setDemoMode(bool enabled);
+    bool isDemoMode() const { return m_demoMode; }
+    void setCurrentStep(int step);
+    int currentStep() const { return m_currentStep; }
+    int totalSteps() const { return m_steps.size(); }
+    const StepInfo& getStep(int index) const;
+    void clearSteps();
+
 private:
     Node* m_root = nullptr;
+    bool m_demoMode = false;
+    int m_currentStep = -1;
+    QVector<StepInfo> m_steps;
 
     static char* dupUtf8(const QString& s);
     static QString fromUtf8(const char* s);
@@ -62,4 +83,14 @@ private:
     static Node* buildBalanced(const QVector<QString>& vals, int l, int r);
 
     static void horizontalPrint(Node* n, int depth, QStringList& out);
+
+    // Вспомогательные методы для демо-режима
+    void addStep(const QString& desc, const QVector<const Node*>& highlighted, 
+                 const QVector<const Node*>& modified, const Node* current, int opType);
+    
+    // Версии методов для демо-режима
+    Node* insertDemo(Node* n, const QString& value, bool& inserted);
+    Node* removeDemo(Node* n, const QString& value, bool& removed);
+    bool containsDemo(Node* n, const QString& value);
+    void balanceDemo();
 };
