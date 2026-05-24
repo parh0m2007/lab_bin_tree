@@ -7,7 +7,14 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt5 COMPONENTS Widgets REQUIRED)
+# Поддержка Qt5 и Qt6
+find_package(Qt6 COMPONENTS Widgets QUIET)
+if(NOT Qt6_FOUND)
+    find_package(Qt5 5.15 COMPONENTS Widgets REQUIRED)
+    set(QT_VERSION_MAJOR 5)
+else()
+    set(QT_VERSION_MAJOR 6)
+endif()
 
 add_executable(BSTQtLab15
     main.cpp
@@ -16,4 +23,8 @@ add_executable(BSTQtLab15
     mainwindow.h mainwindow.cpp
 )
 
-target_link_libraries(BSTQtLab15 PRIVATE Qt5::Widgets)
+if(QT_VERSION_MAJOR EQUAL 6)
+    target_link_libraries(BSTQtLab15 PRIVATE Qt6::Widgets)
+else()
+    target_link_libraries(BSTQtLab15 PRIVATE Qt5::Widgets)
+endif()

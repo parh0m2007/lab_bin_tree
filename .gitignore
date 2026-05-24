@@ -1,24 +1,35 @@
 ```
-# CMake build artifacts
-build/
-CMakeCache.txt
-CMakeFiles/
-Makefile
-cmake_install.cmake
-
-# Qt autogen files
-*_autogen/
-
-# Compiled binaries
+# Compiled and build artifacts
 *.o
 *.obj
+*.exe
+*.dll
+*.so
+*.a
 *.out
-a.out
 
-# Qt moc files
-moc_*.cpp
-moc_*.h
+# Build directories
+build/
+dist/
+cmake-build-*/
 
-# Log files
+# Dependencies
+venv/
+.venv/
+__pycache__/
+*.egg-info/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp files
 *.log
+*.tmp
+
+# System files
+.DS_Store
+Thumbs.db
 ```
